@@ -4,18 +4,23 @@
       <v-container>
         <h1>SCORM Package Helper</h1>
         
-        <v-file-input
-          v-model="zipFile"
-          accept=".zip"
-          label="Upload ZIP file"
-          @change="handleFileUpload"
-        ></v-file-input>
+        <FileUpload @file-loaded="handleFile" />
 
         <v-progress-linear
           v-if="processing"
           indeterminate
           color="primary"
         ></v-progress-linear>
+
+        <v-alert
+          v-if="error"
+          type="error"
+          class="mt-4"
+          closable
+          @click:close="error = null"
+        >
+          {{ error }}
+        </v-alert>
 
         <v-alert
           v-if="isValidScormPackage"
@@ -89,21 +94,21 @@ import JSZip from 'jszip'
 import { saveAs } from 'file-saver'
 import { validateScormManifest } from './utils/scormValidator'
 import { calculatePackageSize } from './utils/fileSize'
+import FileUpload from './components/FileUpload.vue'
 
-const zipFile = ref(null)
 const processing = ref(false)
 const scormPackages = ref([])
 const isValidScormPackage = ref(false)
+const error = ref(null)
 
-async function handleFileUpload() {
-  if (!zipFile.value) return
-  
+async function handleFile(blob) {
   processing.value = true
   scormPackages.value = []
   isValidScormPackage.value = false
+  error.value = null
   
   try {
-    const mainZip = await JSZip.loadAsync(zipFile.value)
+    const mainZip = await JSZip.loadAsync(blob)
     
     // First check if the main ZIP itself is a valid SCORM package
     const manifestFile = mainZip.file('imsmanifest.xml')
@@ -117,8 +122,9 @@ async function handleFileUpload() {
     
     // If not, search for SCORM packages in the ZIP
     await findScormPackages(mainZip, '', false)
-  } catch (error) {
-    console.error('Error processing ZIP file:', error)
+  } catch (err) {
+    error.value = `Error processing file: ${err.message}`
+    console.error('Processing error:', err)
   } finally {
     processing.value = false
   }
